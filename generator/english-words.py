@@ -8,11 +8,15 @@ Faker.seed(42)
 
 
 def generate_realistic_word():
-    choice = random.randint(1, 3)
+    choice = random.randint(1, 5)
     if choice == 1:
         return fake.word()
     elif choice == 2:
         return fake.first_name().lower()
+    elif choice == 3:
+        return fake.last_name().lower()
+    elif choice == 4:
+        return fake.color().lower()
     else:
         return fake.job().split()[0].lower()
 
