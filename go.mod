@@ -1,3 +1,3 @@
-module github.com/annibuliful-lab/english-dictionary-report
+module english-dictionary-report
 
 go 1.22.4
