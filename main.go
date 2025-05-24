@@ -3,6 +3,7 @@ package main
 import (
 	"archive/zip"
 	"bufio"
+	"english-dictionary-report/pkg"
 	"fmt"
 	"io"
 	"io/fs"
@@ -19,16 +20,31 @@ func main() {
 		log.Fatalf("Failed to read word list: %v", err)
 	}
 
+	// Q7.1 – Q7.4
+	countLengthGT5 := countWordsLongerThan(words, 5)
+	countRepeatChars := countWordsWithRepeatingChars(words, 2)
+	countSameStartEnd := countWordsSameStartEnd(words)
+	words = capitalizeFirstLetter(words)
+
+	if err := pkg.ExportWordsToPDF(words, "word_list_output.pdf"); err != nil {
+		log.Fatalf("Failed to export PDF: %v", err)
+	}
+	fmt.Println("✔ PDF exported to word_list_output.pdf")
+
+	fmt.Printf("\n7.1 Words longer than 5 characters: %d\n", countLengthGT5)
+	fmt.Printf("7.2 Words with ≥2 repeating characters: %d\n", countRepeatChars)
+	fmt.Printf("7.3 Words starting and ending with the same letter: %d\n", countSameStartEnd)
+
 	for _, word := range words {
 		if err := writeWordFile(baseDir, word); err != nil {
 			log.Printf("Failed to write word file: %v", err)
 		}
 	}
 
-	fmt.Println("Folder Size Report (Level 1):")
+	fmt.Println("\nFolder Size Report (Level 1):")
 	reportTopLevelSizes(baseDir)
 
-	fmt.Println("\n  Zip Size Report:")
+	fmt.Println("\nZip Size Report:")
 	zipLevelOneDirs(baseDir)
 }
 
@@ -188,4 +204,57 @@ func createZip(srcDir, baseRoot, destZip string) error {
 		_, err = io.Copy(writer, reader)
 		return err
 	})
+}
+
+// 7.1
+func countWordsLongerThan(words []string, length int) int {
+	count := 0
+	for _, word := range words {
+		if len(word) > length {
+			count++
+		}
+	}
+	return count
+}
+
+// 7.2
+func countWordsWithRepeatingChars(words []string, minRepeat int) int {
+	count := 0
+	for _, word := range words {
+		charCount := make(map[rune]int)
+		for _, ch := range word {
+			charCount[ch]++
+		}
+		for _, v := range charCount {
+			if v >= minRepeat {
+				count++
+				break
+			}
+		}
+	}
+	return count
+}
+
+// 7.3
+func countWordsSameStartEnd(words []string) int {
+	count := 0
+	for _, word := range words {
+		if len(word) >= 1 && word[0] == word[len(word)-1] {
+			count++
+		}
+	}
+	return count
+}
+
+// 7.4
+func capitalizeFirstLetter(words []string) []string {
+	newWords := make([]string, len(words))
+	for i, word := range words {
+		if len(word) == 0 {
+			newWords[i] = word
+			continue
+		}
+		newWords[i] = strings.ToUpper(string(word[0])) + word[1:]
+	}
+	return newWords
 }
