@@ -1,4 +1,4 @@
-package pkg
+package parallel
 
 import (
 	"archive/zip"
@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sync"
 )
 
 func ZipTopLevelDirs(root string) {
@@ -17,32 +18,43 @@ func ZipTopLevelDirs(root string) {
 	}
 
 	fmt.Println("\nZip Size Report:")
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
 		}
 
-		l1Name := entry.Name()
-		l1Path := filepath.Join(root, l1Name)
-		zipPath := filepath.Join(root, l1Name+".zip")
+		wg.Add(1)
+		go func(entry fs.DirEntry) {
+			defer wg.Done()
+			l1Name := entry.Name()
+			l1Path := filepath.Join(root, l1Name)
+			zipPath := filepath.Join(root, l1Name+".zip")
 
-		originalSize := ReportDirSize(l1Path)
+			originalSize := computeDirSize(l1Path)
 
-		if err := createZipArchive(l1Path, root, zipPath); err != nil {
-			log.Printf("Failed to zip %s: %v", l1Path, err)
-			continue
-		}
+			if err := createZipArchive(l1Path, root, zipPath); err != nil {
+				log.Printf("Failed to zip %s: %v", l1Path, err)
+				return
+			}
 
-		zipInfo, err := os.Stat(zipPath)
-		if err != nil {
-			log.Printf("Cannot stat zip file %s: %v", zipPath, err)
-			continue
-		}
+			zipInfo, err := os.Stat(zipPath)
+			if err != nil {
+				log.Printf("Cannot stat zip file %s: %v", zipPath, err)
+				return
+			}
 
-		zipSize := zipInfo.Size()
-		saved := float64(originalSize-zipSize) / float64(originalSize) * 100
-		fmt.Printf("[%s] %8d KB → %8d KB (Saved %.1f%%)\n", l1Name, originalSize/1024, zipSize/1024, saved)
+			zipSize := zipInfo.Size()
+			saved := float64(originalSize-zipSize) / float64(originalSize) * 100
+
+			mu.Lock()
+			fmt.Printf("[%s] %8d KB → %8d KB (Saved %.1f%%)\n", l1Name, originalSize/1024, zipSize/1024, saved)
+			mu.Unlock()
+		}(entry)
 	}
+	wg.Wait()
 }
 
 func createZipArchive(srcDir, baseRoot, destZip string) error {

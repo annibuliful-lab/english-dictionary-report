@@ -234,3 +234,5 @@ output
 *.prof
 cpu.svg
 mem.svg
+v1-output
+v2-output

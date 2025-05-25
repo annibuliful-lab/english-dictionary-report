@@ -1,82 +1,98 @@
 package main
 
 import (
-	"english-dictionary-report/pkg"
-	"runtime"
-	"runtime/pprof"
-	"time"
-
+	"english-dictionary-report/pkg/parallel"
+	"english-dictionary-report/pkg/sequence"
+	"english-dictionary-report/pkg/shared"
 	"fmt"
 	"log"
 	"os"
+	"runtime/pprof"
 )
 
 func main() {
-	start := time.Now()
 
-	// Enable CPU profiling
-	fCPU, err := os.Create("cpu.prof")
-	if err != nil {
-		log.Fatalf("Failed to create CPU profile: %v", err)
-	}
-	defer fCPU.Close()
-	if err := pprof.StartCPUProfile(fCPU); err != nil {
-		log.Fatalf("Failed to start CPU profiling: %v", err)
-	}
-	defer pprof.StopCPUProfile()
+	version, wordFilePath, baseDir := parseArgs()
 
-	// Main logic
-	wordFilePath, baseDir := parseArgs()
-
-	words, err := pkg.LoadWordsFromFile(wordFilePath)
-	if err != nil {
-		log.Fatalf("Failed to read word list: %v", err)
+	// Optional CPU profiling
+	if f, err := os.Create(fmt.Sprintf("%s/cpu.prof", baseDir)); err == nil {
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
+		defer func() {
+			mf, _ := os.Create(fmt.Sprintf("%s/memory.prof", baseDir))
+			pprof.WriteHeapProfile(mf)
+			mf.Close()
+		}()
 	}
 
-	pkg.AnalyzeAndReport(words)
-	capitalFirstLetterWords := pkg.CapitalizeFirstLetter(words)
-
-	if err := pkg.WriteWordsToTextFile(capitalFirstLetterWords, "./output/word_list_capitalized.txt"); err != nil {
-		log.Fatalf("Failed to write capitalized words to text file: %v", err)
-	}
-	fmt.Println("Capitalized word list written to word_list_capitalized.txt")
-
-	if err := pkg.ExportWordsToPDF(words, "./output/word_list_output.pdf"); err != nil {
-		log.Fatalf("Failed to export PDF: %v", err)
-	}
-	fmt.Println("PDF exported to word_list_output.pdf")
-
-	if err := pkg.WriteWordFiles(words, baseDir); err != nil {
-		log.Printf("File writing errors: %v", err)
-	}
-
-	pkg.ReportFolderSizes(baseDir)
-	pkg.ZipTopLevelDirs(baseDir)
-
-	// Measure runtime
-	fmt.Printf("\nExecution time: %s\n", time.Since(start))
-
-	// Measure Heap profiling
-	fMem, err := os.Create("mem.prof")
-	if err != nil {
-		log.Fatalf("Failed to create memory profile: %v", err)
-	}
-	defer fMem.Close()
-	runtime.GC() // run garbage collection before measuring
-	if err := pprof.WriteHeapProfile(fMem); err != nil {
-		log.Fatalf("Failed to write memory profile: %v", err)
+	if version == "v2" {
+		v2Execute(wordFilePath, baseDir)
+	} else if version == "v1" {
+		V1Execute(wordFilePath, baseDir)
+	} else {
+		os.Exit(0)
 	}
 
 }
 
-func parseArgs() (wordFilePath, baseDir string) {
-	if len(os.Args) < 2 {
-		log.Fatal("Usage: go run main.go <word_list_file> [base_output_dir]")
+func V1Execute(wordFilePath string, baseDir string) {
+	words, err := shared.LoadWordsFromFile(wordFilePath)
+	if err != nil {
+		log.Fatalf("Failed to read word list: %v", err)
 	}
-	wordFilePath = os.Args[1]
+
+	words = shared.CapitalizeFirstLetter(words)
+
+	if err := shared.ExportWordsToPDF(words, fmt.Sprintf("%s/word_list_output.pdf", baseDir)); err != nil {
+		log.Fatalf("Failed to export PDF: %v", err)
+	}
+	fmt.Println("PDF exported to word_list_output.pdf")
+
+	if err := parallel.WriteWordFiles(words, baseDir); err != nil {
+		log.Printf("File writing errors: %v", err)
+	}
+
+	shared.ReportFolderSizes(baseDir)
+	sequence.ZipTopLevelDirs(baseDir)
+
+	shared.AnalyzeAndReport(words)
+}
+
+func v2Execute(wordFilePath string, baseDir string) {
+	words, err := shared.LoadWordsFromFile(wordFilePath)
+	if err != nil {
+		log.Fatalf("Failed to read word list: %v", err)
+	}
+
+	if err := parallel.WriteWordFiles(words, baseDir); err != nil {
+		log.Printf("File writing errors: %v", err)
+	}
+
+	if err := shared.ExportWordsToPDF(words, fmt.Sprintf("%s/word_list_output.pdf", baseDir)); err != nil {
+		log.Fatalf("Failed to export PDF: %v", err)
+	}
+	fmt.Println("PDF exported to word_list_output.pdf")
+
+	words = shared.CapitalizeFirstLetter(words)
+
+	shared.ReportFolderSizes(baseDir)
+	parallel.ZipTopLevelDirs(baseDir)
+
+	shared.AnalyzeAndReport(words)
+}
+
+func parseArgs() (version, wordFilePath, baseDir string) {
+	if len(os.Args) < 3 {
+		log.Fatal("Usage: go run main.go <v1|v2> <word_list_file> [base_output_dir]")
+	}
+	version = os.Args[1]
+	wordFilePath = os.Args[2]
 	baseDir = "output"
-	if len(os.Args) >= 3 {
-		baseDir = os.Args[2]
+	if len(os.Args) >= 4 {
+		baseDir = os.Args[3]
 	}
+
+	baseDir = fmt.Sprintf("%s-%s", version, baseDir)
+
 	return
 }
