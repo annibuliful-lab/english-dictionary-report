@@ -2,7 +2,6 @@ package parallel
 
 import (
 	"bufio"
-	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -93,7 +92,7 @@ func LoadWordsFromFile(path string) ([]string, error) {
 			for line := range lines {
 				word := strings.ToLower(strings.TrimSpace(line))
 				if len(word) >= 2 {
-					fmt.Println(word) // Print each word immediately
+					// fmt.Println(word) // Print each word immediately
 					results <- word
 				}
 			}

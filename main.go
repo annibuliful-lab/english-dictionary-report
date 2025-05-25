@@ -8,10 +8,14 @@ import (
 	"log"
 	"os"
 	"runtime/pprof"
-	"strconv"
+	"time"
 )
 
 func main() {
+
+	os.RemoveAll("./v1-output")
+	os.RemoveAll("./v2-output")
+
 	version, wordFilePath, baseDir := parseArgs()
 
 	// Optional CPU profiling
@@ -25,61 +29,37 @@ func main() {
 		}()
 	}
 
-	start := shared.Now()
-
 	switch version {
 	case "v1":
-		V1Execute(wordFilePath, baseDir)
+		execute("v1", shared.LoadWordsFromFile, sequence.WriteWordFiles, sequence.ZipTopLevelDirs, wordFilePath, baseDir)
 	case "v2":
-		v2Execute(wordFilePath, baseDir)
+		execute("v2", parallel.LoadWordsFromFile, parallel.WriteWordFiles, parallel.ZipTopLevelDirs, wordFilePath, baseDir)
 	default:
-		log.Fatal("Version must be 'v1' or 'v2'")
-	}
-
-	duration := shared.Since(start)
-	fmt.Printf("Execution time (%s): %s\n", version, duration)
-
-	// Write to CSV
-	if err := shared.ReportIntoCSVRow("execution_comparison.csv", []string{
-		version,
-		strconv.FormatInt(duration.Milliseconds(), 10),
-	}); err != nil {
-		log.Printf("Failed to write CSV: %v", err)
+		log.Fatalf("Unknown version: %s", version)
 	}
 }
 
-func V1Execute(wordFilePath string, baseDir string) {
-	words, err := shared.LoadWordsFromFile(wordFilePath)
+func execute(
+	version string,
+	loadFunc func(string) ([]string, error),
+	writeFunc func([]string, string) error,
+	zipFunc func(string),
+	wordFilePath, baseDir string,
+) {
+	start := time.Now()
+
+	words, err := loadFunc(wordFilePath)
 	if err != nil {
 		log.Fatalf("Failed to read word list: %v", err)
 	}
 
-	words = shared.CapitalizeFirstLetter(words)
+	log.Println("Loaded words")
 
-	if err := shared.ExportWordsToPDF(words, fmt.Sprintf("%s/word_list_output.pdf", baseDir)); err != nil {
-		log.Fatalf("Failed to export PDF: %v", err)
-	}
-	fmt.Println("PDF exported to word_list_output.pdf")
-
-	if err := parallel.WriteWordFiles(words, baseDir); err != nil {
+	if err := writeFunc(words, baseDir); err != nil {
 		log.Printf("File writing errors: %v", err)
 	}
 
-	shared.ReportFolderSizes(baseDir)
-	sequence.ZipTopLevelDirs(baseDir)
-
-	shared.AnalyzeAndReport(words)
-}
-
-func v2Execute(wordFilePath string, baseDir string) {
-	words, err := parallel.LoadWordsFromFile(wordFilePath)
-	if err != nil {
-		log.Fatalf("Failed to read word list: %v", err)
-	}
-
-	if err := parallel.WriteWordFiles(words, baseDir); err != nil {
-		log.Printf("File writing errors: %v", err)
-	}
+	log.Println("TXT file to text")
 
 	if err := shared.ExportWordsToPDF(words, fmt.Sprintf("%s/word_list_output.pdf", baseDir)); err != nil {
 		log.Fatalf("Failed to export PDF: %v", err)
@@ -88,10 +68,19 @@ func v2Execute(wordFilePath string, baseDir string) {
 
 	words = shared.CapitalizeFirstLetter(words)
 
+	if err := sequence.WriteWordsToTextFile(words, fmt.Sprintf("%s/capital-first-letter.txt", baseDir)); err != nil {
+		log.Printf("Failed to write capital-first-letter.txt: %v", err)
+	}
+
 	shared.ReportFolderSizes(baseDir)
-	parallel.ZipTopLevelDirs(baseDir)
+	zipFunc(baseDir)
 
 	shared.AnalyzeAndReport(words)
+
+	duration := time.Since(start)
+
+	fmt.Println("Execution Duraction Time: ", duration)
+	shared.WriteDurationCSV(version, duration, "./")
 }
 
 func parseArgs() (version, wordFilePath, baseDir string) {

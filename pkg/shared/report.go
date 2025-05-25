@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 func AnalyzeAndReport(words []string) {
@@ -65,28 +66,34 @@ func ReportDirSize(dir string) int64 {
 	return totalSize
 }
 
-func ReportIntoCSVRow(filename string, row []string) error {
+func WriteDurationCSV(version string, duration time.Duration, baseDir string) {
+	filePath := fmt.Sprintf("%s/execution_time.csv", baseDir)
+	isNew := false
+
 	// Check if file exists
-	fileExists := false
-	if _, err := os.Stat(filename); err == nil {
-		fileExists = true
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		isNew = true
 	}
 
-	file, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
-		return err
+		log.Printf("Failed to open CSV for writing: %v", err)
+		return
 	}
-	defer file.Close()
+	defer f.Close()
 
-	writer := csv.NewWriter(file)
+	writer := csv.NewWriter(f)
 	defer writer.Flush()
 
-	// Write header if it's a new file
-	if !fileExists {
-		if err := writer.Write([]string{"version", "duration_ms"}); err != nil {
-			return err
-		}
+	if isNew {
+		_ = writer.Write([]string{"Version", "DurationMilliseconds"})
 	}
 
-	return writer.Write(row)
+	err = writer.Write([]string{
+		version,
+		fmt.Sprintf("%.2f", float64(duration.Milliseconds())),
+	})
+	if err != nil {
+		log.Printf("Failed to write duration to CSV: %v", err)
+	}
 }

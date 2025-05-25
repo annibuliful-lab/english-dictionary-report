@@ -6,11 +6,11 @@ A high-performance, cross-platform CLI tool for processing English wordlists, bu
 
 Download the latest binaries from the [Releases page](https://github.com/annibuliful-lab/english-dictionary-report/releases/latest).
 
-| Platform | Architecture | Download Link                                                                                                                                                                    |
-| -------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Windows  | amd64        | [english-dictionary-report-windows-amd64.exe](https://github.com/annibuliful-lab/english-dictionary-report/releases/latest/download/english-dictionary-report-windows-amd64.exe) |
-| Linux    | amd64        | [english-dictionary-report-linux-amd64](https://github.com/annibuliful-lab/english-dictionary-report/releases/latest/download/english-dictionary-report-linux-amd64)             |
-| macOS    | amd64        | [english-dictionary-report-darwin-amd64](https://github.com/annibuliful-lab/english-dictionary-report/releases/latest/download/english-dictionary-report-darwin-amd64)           |
+| Platform | Architecture | Download Link                                                                                                                                          |
+| -------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Windows  | amd64        | [english-dictionary-report-windows-amd64.exe](https://github.com/annibuliful-lab/english-dictionary-report/releases/latest/download/windows-amd64.exe) |
+| Linux    | amd64        | [english-dictionary-report-linux-amd64](https://github.com/annibuliful-lab/english-dictionary-report/releases/latest/download/linux-amd64)             |
+| macOS    | amd64        | [english-dictionary-report-darwin-amd64](https://github.com/annibuliful-lab/english-dictionary-report/releases/latest/download/darwin-amd64)           |
 
 > **Note:** Replace `english-dictionary-report` with the actual binary name if it differs.
 
