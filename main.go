@@ -3,19 +3,31 @@ package main
 import (
 	"archive/zip"
 	"bufio"
-
 	"fmt"
 	"io"
 	"io/fs"
 	"log"
 	"os"
 	"path/filepath"
+	"runtime/pprof"
 	"strings"
+	"sync"
 
 	"github.com/phpdave11/gofpdf"
 )
 
 func main() {
+	// Optional CPU profiling
+	if f, err := os.Create("cpu.prof"); err == nil {
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
+		defer func() {
+			mf, _ := os.Create("mem.prof")
+			pprof.WriteHeapProfile(mf)
+			mf.Close()
+		}()
+	}
+
 	wordFilePath, baseDir := parseArgs()
 
 	words, err := loadWords(wordFilePath)
@@ -80,10 +92,33 @@ func analyzeAndReport(words []string) {
 }
 
 func writeWordFiles(words []string, baseDir string) error {
+	const workerCount = 10
+	jobs := make(chan string, len(words))
+	errs := make(chan error, len(words))
+
+	var wg sync.WaitGroup
+	for i := 0; i < workerCount; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for word := range jobs {
+				if err := writeWordFile(baseDir, word); err != nil {
+					errs <- fmt.Errorf("failed to write %s: %w", word, err)
+				}
+			}
+		}()
+	}
+
 	for _, word := range words {
-		if err := writeWordFile(baseDir, word); err != nil {
-			log.Printf("Failed to write %s: %v", word, err)
-		}
+		jobs <- word
+	}
+	close(jobs)
+
+	wg.Wait()
+	close(errs)
+
+	for err := range errs {
+		log.Println(err)
 	}
 	return nil
 }
@@ -97,8 +132,13 @@ func writeWordFile(baseDir, word string) error {
 	}
 
 	filePath := filepath.Join(dir, word+".txt")
-	content := strings.Repeat(word+"\n", 100)
-	return os.WriteFile(filePath, []byte(content), 0644)
+
+	var sb strings.Builder
+	for i := 0; i < 100; i++ {
+		sb.WriteString(word)
+		sb.WriteByte('\n')
+	}
+	return os.WriteFile(filePath, []byte(sb.String()), 0644)
 }
 
 func reportFolderSizes(root string) {
@@ -120,8 +160,7 @@ func reportFolderSizes(root string) {
 			if err != nil || d.IsDir() {
 				return nil
 			}
-			info, err := os.Stat(path)
-			if err == nil {
+			if info, err := d.Info(); err == nil {
 				fmt.Printf("  %8d KB  %s\n", info.Size()/1024, path)
 				totalSize += info.Size()
 			}
@@ -173,8 +212,7 @@ func computeDirSize(dir string) int64 {
 		if err != nil || d.IsDir() {
 			return nil
 		}
-		info, err := os.Stat(path)
-		if err == nil {
+		if info, err := d.Info(); err == nil {
 			totalSize += info.Size()
 		}
 		return nil
