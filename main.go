@@ -3,7 +3,7 @@ package main
 import (
 	"archive/zip"
 	"bufio"
-	"english-dictionary-report/pkg"
+
 	"fmt"
 	"io"
 	"io/fs"
@@ -11,56 +11,47 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/phpdave11/gofpdf"
 )
 
 func main() {
 	wordFilePath, baseDir := parseArgs()
-	words, err := readWordList(wordFilePath)
+
+	words, err := loadWords(wordFilePath)
 	if err != nil {
 		log.Fatalf("Failed to read word list: %v", err)
 	}
 
-	// Q7.1 – Q7.4
-	countLengthGT5 := countWordsLongerThan(words, 5)
-	countRepeatChars := countWordsWithRepeatingChars(words, 2)
-	countSameStartEnd := countWordsSameStartEnd(words)
+	analyzeAndReport(words)
 	words = capitalizeFirstLetter(words)
 
-	if err := pkg.ExportWordsToPDF(words, "word_list_output.pdf"); err != nil {
+	if err := exportWordsToPDF(words, "word_list_output.pdf"); err != nil {
 		log.Fatalf("Failed to export PDF: %v", err)
 	}
-	fmt.Println("✔ PDF exported to word_list_output.pdf")
+	fmt.Println("PDF exported to word_list_output.pdf")
 
-	fmt.Printf("\n7.1 Words longer than 5 characters: %d\n", countLengthGT5)
-	fmt.Printf("7.2 Words with ≥2 repeating characters: %d\n", countRepeatChars)
-	fmt.Printf("7.3 Words starting and ending with the same letter: %d\n", countSameStartEnd)
-
-	for _, word := range words {
-		if err := writeWordFile(baseDir, word); err != nil {
-			log.Printf("Failed to write word file: %v", err)
-		}
+	if err := writeWordFiles(words, baseDir); err != nil {
+		log.Printf("File writing errors: %v", err)
 	}
 
-	fmt.Println("\nFolder Size Report (Level 1):")
-	reportTopLevelSizes(baseDir)
-
-	fmt.Println("\nZip Size Report:")
-	zipLevelOneDirs(baseDir)
+	reportFolderSizes(baseDir)
+	zipTopLevelDirs(baseDir)
 }
 
-func parseArgs() (string, string) {
+func parseArgs() (wordFilePath, baseDir string) {
 	if len(os.Args) < 2 {
 		log.Fatal("Usage: go run main.go <word_list_file> [base_output_dir]")
 	}
-	wordFilePath := os.Args[1]
-	baseDir := "output"
+	wordFilePath = os.Args[1]
+	baseDir = "output"
 	if len(os.Args) >= 3 {
 		baseDir = os.Args[2]
 	}
-	return wordFilePath, baseDir
+	return
 }
 
-func readWordList(path string) ([]string, error) {
+func loadWords(path string) ([]string, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -78,6 +69,25 @@ func readWordList(path string) ([]string, error) {
 	return words, scanner.Err()
 }
 
+func analyzeAndReport(words []string) {
+	countLengthGT5 := countWordsLongerThan(words, 5)
+	countRepeatChars := countWordsWithRepeatingChars(words, 2)
+	countSameStartEnd := countWordsSameStartEnd(words)
+
+	fmt.Printf("\n7.1 Words longer than 5 characters: %d\n", countLengthGT5)
+	fmt.Printf("7.2 Words with ≥2 repeating characters: %d\n", countRepeatChars)
+	fmt.Printf("7.3 Words starting and ending with the same letter: %d\n", countSameStartEnd)
+}
+
+func writeWordFiles(words []string, baseDir string) error {
+	for _, word := range words {
+		if err := writeWordFile(baseDir, word); err != nil {
+			log.Printf("Failed to write %s: %v", word, err)
+		}
+	}
+	return nil
+}
+
 func writeWordFile(baseDir, word string) error {
 	l1, l2 := string(word[0]), string(word[1])
 	dir := filepath.Join(baseDir, l1, l2)
@@ -86,12 +96,12 @@ func writeWordFile(baseDir, word string) error {
 		return fmt.Errorf("creating dir %s: %w", dir, err)
 	}
 
-	content := strings.Repeat(word+"\n", 100)
 	filePath := filepath.Join(dir, word+".txt")
+	content := strings.Repeat(word+"\n", 100)
 	return os.WriteFile(filePath, []byte(content), 0644)
 }
 
-func reportTopLevelSizes(root string) {
+func reportFolderSizes(root string) {
 	entries, err := os.ReadDir(root)
 	if err != nil {
 		log.Fatalf("Failed to read base directory: %v", err)
@@ -122,23 +132,25 @@ func reportTopLevelSizes(root string) {
 	}
 }
 
-func zipLevelOneDirs(root string) {
+func zipTopLevelDirs(root string) {
 	entries, err := os.ReadDir(root)
 	if err != nil {
 		log.Fatalf("Failed to read base directory: %v", err)
 	}
 
+	fmt.Println("\nZip Size Report:")
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
 		}
+
 		l1Name := entry.Name()
 		l1Path := filepath.Join(root, l1Name)
 		zipPath := filepath.Join(root, l1Name+".zip")
 
 		originalSize := computeDirSize(l1Path)
 
-		if err := createZip(l1Path, root, zipPath); err != nil {
+		if err := createZipArchive(l1Path, root, zipPath); err != nil {
 			log.Printf("Failed to zip %s: %v", l1Path, err)
 			continue
 		}
@@ -150,14 +162,14 @@ func zipLevelOneDirs(root string) {
 		}
 
 		zipSize := zipInfo.Size()
-		diffPercent := float64(originalSize-zipSize) / float64(originalSize) * 100
-		fmt.Printf("[%s] %8d KB → %8d KB (Saved %.1f%%)\n", l1Name, originalSize/1024, zipSize/1024, diffPercent)
+		saved := float64(originalSize-zipSize) / float64(originalSize) * 100
+		fmt.Printf("[%s] %8d KB → %8d KB (Saved %.1f%%)\n", l1Name, originalSize/1024, zipSize/1024, saved)
 	}
 }
 
 func computeDirSize(dir string) int64 {
 	var totalSize int64
-	filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+	_ = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return nil
 		}
@@ -170,7 +182,7 @@ func computeDirSize(dir string) int64 {
 	return totalSize
 }
 
-func createZip(srcDir, baseRoot, destZip string) error {
+func createZipArchive(srcDir, baseRoot, destZip string) error {
 	zipFile, err := os.Create(destZip)
 	if err != nil {
 		return fmt.Errorf("creating zip: %w", err)
@@ -206,7 +218,8 @@ func createZip(srcDir, baseRoot, destZip string) error {
 	})
 }
 
-// 7.1
+// ---------------- Word Analysis ---------------- //
+
 func countWordsLongerThan(words []string, length int) int {
 	count := 0
 	for _, word := range words {
@@ -217,7 +230,6 @@ func countWordsLongerThan(words []string, length int) int {
 	return count
 }
 
-// 7.2
 func countWordsWithRepeatingChars(words []string, minRepeat int) int {
 	count := 0
 	for _, word := range words {
@@ -235,7 +247,6 @@ func countWordsWithRepeatingChars(words []string, minRepeat int) int {
 	return count
 }
 
-// 7.3
 func countWordsSameStartEnd(words []string) int {
 	count := 0
 	for _, word := range words {
@@ -246,7 +257,6 @@ func countWordsSameStartEnd(words []string) int {
 	return count
 }
 
-// 7.4
 func capitalizeFirstLetter(words []string) []string {
 	newWords := make([]string, len(words))
 	for i, word := range words {
@@ -257,4 +267,30 @@ func capitalizeFirstLetter(words []string) []string {
 		newWords[i] = strings.ToUpper(string(word[0])) + word[1:]
 	}
 	return newWords
+}
+
+func exportWordsToPDF(words []string, outputPath string) error {
+	pdf := gofpdf.New("P", "mm", "A4", "")
+	pdf.AddPage()
+	pdf.SetFont("Arial", "", 14)
+
+	lineHeight := 10.0
+	marginTop := 20.0
+	marginBottom := 270.0
+	y := marginTop
+
+	for _, word := range words {
+		if y > marginBottom {
+			pdf.AddPage()
+			y = marginTop
+		}
+		pdf.Text(20, y, word)
+		y += lineHeight
+	}
+
+	err := pdf.OutputFileAndClose(outputPath)
+	if err != nil {
+		return fmt.Errorf("failed to write PDF: %w", err)
+	}
+	return nil
 }
