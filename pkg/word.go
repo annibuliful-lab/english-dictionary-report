@@ -1,40 +1,52 @@
 package pkg
 
-import (
-	"bufio"
-	"fmt"
-	"os"
-	"path/filepath"
-	"strings"
-)
+import "strings"
 
-func ReadWordList(path string) ([]string, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-
-	var words []string
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		word := strings.ToLower(strings.TrimSpace(scanner.Text()))
-		if len(word) >= 2 {
-			words = append(words, word)
+func CountWordsLongerThan(words []string, length int) int {
+	count := 0
+	for _, word := range words {
+		if len(word) > length {
+			count++
 		}
 	}
-	return words, scanner.Err()
+	return count
 }
 
-func WriteWordFile(baseDir, word string) error {
-	l1, l2 := string(word[0]), string(word[1])
-	dir := filepath.Join(baseDir, l1, l2)
-
-	if err := os.MkdirAll(dir, os.ModePerm); err != nil {
-		return fmt.Errorf("creating dir %s: %w", dir, err)
+func CountWordsWithRepeatingChars(words []string, minRepeat int) int {
+	count := 0
+	for _, word := range words {
+		charCount := make(map[rune]int)
+		for _, ch := range word {
+			charCount[ch]++
+		}
+		for _, v := range charCount {
+			if v >= minRepeat {
+				count++
+				break
+			}
+		}
 	}
+	return count
+}
 
-	content := strings.Repeat(word+"\n", 100)
-	filePath := filepath.Join(dir, word+".txt")
-	return os.WriteFile(filePath, []byte(content), 0644)
+func CountWordsSameStartEnd(words []string) int {
+	count := 0
+	for _, word := range words {
+		if len(word) >= 1 && word[0] == word[len(word)-1] {
+			count++
+		}
+	}
+	return count
+}
+
+func CapitalizeFirstLetter(words []string) []string {
+	newWords := make([]string, len(words))
+	for i, word := range words {
+		if len(word) == 0 {
+			newWords[i] = word
+			continue
+		}
+		newWords[i] = strings.ToUpper(string(word[0])) + word[1:]
+	}
+	return newWords
 }

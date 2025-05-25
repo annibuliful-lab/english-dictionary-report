@@ -10,23 +10,25 @@ import (
 	"path/filepath"
 )
 
-func ZipLevelOneDirs(root string) {
+func ZipTopLevelDirs(root string) {
 	entries, err := os.ReadDir(root)
 	if err != nil {
 		log.Fatalf("Failed to read base directory: %v", err)
 	}
 
+	fmt.Println("\nZip Size Report:")
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
 		}
+
 		l1Name := entry.Name()
 		l1Path := filepath.Join(root, l1Name)
 		zipPath := filepath.Join(root, l1Name+".zip")
 
-		originalSize := computeDirSize(l1Path)
+		originalSize := ReportDirSize(l1Path)
 
-		if err := createZip(l1Path, root, zipPath); err != nil {
+		if err := createZipArchive(l1Path, root, zipPath); err != nil {
 			log.Printf("Failed to zip %s: %v", l1Path, err)
 			continue
 		}
@@ -38,27 +40,12 @@ func ZipLevelOneDirs(root string) {
 		}
 
 		zipSize := zipInfo.Size()
-		diffPercent := float64(originalSize-zipSize) / float64(originalSize) * 100
-		fmt.Printf("[%s] %8d KB → %8d KB (Saved %.1f%%)\n", l1Name, originalSize/1024, zipSize/1024, diffPercent)
+		saved := float64(originalSize-zipSize) / float64(originalSize) * 100
+		fmt.Printf("[%s] %8d KB → %8d KB (Saved %.1f%%)\n", l1Name, originalSize/1024, zipSize/1024, saved)
 	}
 }
 
-func computeDirSize(dir string) int64 {
-	var totalSize int64
-	filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
-			return nil
-		}
-		info, err := os.Stat(path)
-		if err == nil {
-			totalSize += info.Size()
-		}
-		return nil
-	})
-	return totalSize
-}
-
-func createZip(srcDir, baseRoot, destZip string) error {
+func createZipArchive(srcDir, baseRoot, destZip string) error {
 	zipFile, err := os.Create(destZip)
 	if err != nil {
 		return fmt.Errorf("creating zip: %w", err)
