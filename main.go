@@ -3,6 +3,9 @@ package main
 import (
 	"archive/zip"
 	"bufio"
+	"runtime"
+	"runtime/pprof"
+	"time"
 
 	"fmt"
 	"io"
@@ -16,6 +19,20 @@ import (
 )
 
 func main() {
+	start := time.Now()
+
+	// Enable CPU profiling
+	fCPU, err := os.Create("cpu.prof")
+	if err != nil {
+		log.Fatalf("Failed to create CPU profile: %v", err)
+	}
+	defer fCPU.Close()
+	if err := pprof.StartCPUProfile(fCPU); err != nil {
+		log.Fatalf("Failed to start CPU profiling: %v", err)
+	}
+	defer pprof.StopCPUProfile()
+
+	// Main logic
 	wordFilePath, baseDir := parseArgs()
 
 	words, err := loadWords(wordFilePath)
@@ -24,9 +41,14 @@ func main() {
 	}
 
 	analyzeAndReport(words)
-	words = capitalizeFirstLetter(words)
+	capitalFirstLetterWords := capitalizeFirstLetter(words)
 
-	if err := exportWordsToPDF(words, "word_list_output.pdf"); err != nil {
+	if err := writeWordsToTextFile(capitalFirstLetterWords, "./output/word_list_capitalized.txt"); err != nil {
+		log.Fatalf("Failed to write capitalized words to text file: %v", err)
+	}
+	fmt.Println("Capitalized word list written to word_list_capitalized.txt")
+
+	if err := exportWordsToPDF(words, "./output/word_list_output.pdf"); err != nil {
 		log.Fatalf("Failed to export PDF: %v", err)
 	}
 	fmt.Println("PDF exported to word_list_output.pdf")
@@ -37,6 +59,21 @@ func main() {
 
 	reportFolderSizes(baseDir)
 	zipTopLevelDirs(baseDir)
+
+	// Measure runtime
+	fmt.Printf("\nExecution time: %s\n", time.Since(start))
+
+	// Measure Heap profiling
+	fMem, err := os.Create("mem.prof")
+	if err != nil {
+		log.Fatalf("Failed to create memory profile: %v", err)
+	}
+	defer fMem.Close()
+	runtime.GC() // run garbage collection before measuring
+	if err := pprof.WriteHeapProfile(fMem); err != nil {
+		log.Fatalf("Failed to write memory profile: %v", err)
+	}
+
 }
 
 func parseArgs() (wordFilePath, baseDir string) {
@@ -293,4 +330,20 @@ func exportWordsToPDF(words []string, outputPath string) error {
 		return fmt.Errorf("failed to write PDF: %w", err)
 	}
 	return nil
+}
+
+func writeWordsToTextFile(words []string, outputPath string) error {
+	file, err := os.Create(outputPath)
+	if err != nil {
+		return fmt.Errorf("failed to create text file: %w", err)
+	}
+	defer file.Close()
+
+	writer := bufio.NewWriter(file)
+	for _, word := range words {
+		if _, err := writer.WriteString(word + "\n"); err != nil {
+			return fmt.Errorf("failed to write to text file: %w", err)
+		}
+	}
+	return writer.Flush()
 }
