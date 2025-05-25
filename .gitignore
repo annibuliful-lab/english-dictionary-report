@@ -231,3 +231,8 @@ pyrightconfig.json
 # End of https://www.toptal.com/developers/gitignore/api/macos,python,go
 output
 *.pdf
+*.prof
+cpu.svg
+mem.svg
+v1-output
+v2-output
