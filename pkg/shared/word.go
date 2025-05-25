@@ -1,4 +1,4 @@
-package sequence
+package shared
 
 import "strings"
 

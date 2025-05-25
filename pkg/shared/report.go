@@ -1,4 +1,4 @@
-package sequence
+package shared
 
 import (
 	"fmt"
@@ -7,6 +7,16 @@ import (
 	"os"
 	"path/filepath"
 )
+
+func AnalyzeAndReport(words []string) {
+	countLengthGT5 := CountWordsLongerThan(words, 5)
+	countRepeatChars := CountWordsWithRepeatingChars(words, 2)
+	countSameStartEnd := CountWordsSameStartEnd(words)
+
+	fmt.Printf("\n7.1 Words longer than 5 characters: %d\n", countLengthGT5)
+	fmt.Printf("7.2 Words with ≥2 repeating characters: %d\n", countRepeatChars)
+	fmt.Printf("7.3 Words starting and ending with the same letter: %d\n", countSameStartEnd)
+}
 
 func ReportFolderSizes(root string) {
 	entries, err := os.ReadDir(root)
@@ -37,16 +47,6 @@ func ReportFolderSizes(root string) {
 
 		fmt.Printf("==> Total size: %d KB\n", totalSize/1024)
 	}
-}
-
-func AnalyzeAndReport(words []string) {
-	countLengthGT5 := CountWordsLongerThan(words, 5)
-	countRepeatChars := CountWordsWithRepeatingChars(words, 2)
-	countSameStartEnd := CountWordsSameStartEnd(words)
-
-	fmt.Printf("\n7.1 Words longer than 5 characters: %d\n", countLengthGT5)
-	fmt.Printf("7.2 Words with ≥2 repeating characters: %d\n", countRepeatChars)
-	fmt.Printf("7.3 Words starting and ending with the same letter: %d\n", countSameStartEnd)
 }
 
 func ReportDirSize(dir string) int64 {

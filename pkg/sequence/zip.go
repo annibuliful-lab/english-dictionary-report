@@ -2,6 +2,7 @@ package sequence
 
 import (
 	"archive/zip"
+	"english-dictionary-report/pkg/shared"
 	"fmt"
 	"io"
 	"io/fs"
@@ -26,7 +27,7 @@ func ZipTopLevelDirs(root string) {
 		l1Path := filepath.Join(root, l1Name)
 		zipPath := filepath.Join(root, l1Name+".zip")
 
-		originalSize := ReportDirSize(l1Path)
+		originalSize := shared.ReportDirSize(l1Path)
 
 		if err := createZipArchive(l1Path, root, zipPath); err != nil {
 			log.Printf("Failed to zip %s: %v", l1Path, err)
