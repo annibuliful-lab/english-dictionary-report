@@ -1,9 +1,12 @@
 package parallel
 
 import (
+	"bufio"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 )
@@ -63,4 +66,63 @@ func WriteWordFiles(words []string, baseDir string) error {
 		log.Println(err)
 	}
 	return nil
+}
+
+func LoadWordsFromFile(path string) ([]string, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	buf := make([]byte, 0, 64*1024)
+	scanner.Buffer(buf, 1024*1024)
+
+	numWorkers := runtime.NumCPU()
+	lines := make(chan string, numWorkers*2)
+	results := make(chan string, numWorkers*2)
+
+	var wg sync.WaitGroup
+
+	// Workers: process and print
+	for i := 0; i < numWorkers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for line := range lines {
+				word := strings.ToLower(strings.TrimSpace(line))
+				if len(word) >= 2 {
+					fmt.Println(word) // Print each word immediately
+					results <- word
+				}
+			}
+		}()
+	}
+
+	// Feed lines
+	go func() {
+		for scanner.Scan() {
+			lines <- scanner.Text()
+		}
+		close(lines)
+	}()
+
+	// Close results after all workers are done
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	// Collect results
+	words := make([]string, 0, 100000)
+	for word := range results {
+		words = append(words, word)
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+
+	return words, nil
 }

@@ -8,10 +8,10 @@ import (
 	"log"
 	"os"
 	"runtime/pprof"
+	"strconv"
 )
 
 func main() {
-
 	version, wordFilePath, baseDir := parseArgs()
 
 	// Optional CPU profiling
@@ -25,14 +25,27 @@ func main() {
 		}()
 	}
 
-	if version == "v2" {
-		v2Execute(wordFilePath, baseDir)
-	} else if version == "v1" {
+	start := shared.Now()
+
+	switch version {
+	case "v1":
 		V1Execute(wordFilePath, baseDir)
-	} else {
-		os.Exit(0)
+	case "v2":
+		v2Execute(wordFilePath, baseDir)
+	default:
+		log.Fatal("Version must be 'v1' or 'v2'")
 	}
 
+	duration := shared.Since(start)
+	fmt.Printf("Execution time (%s): %s\n", version, duration)
+
+	// Write to CSV
+	if err := shared.ReportIntoCSVRow("execution_comparison.csv", []string{
+		version,
+		strconv.FormatInt(duration.Milliseconds(), 10),
+	}); err != nil {
+		log.Printf("Failed to write CSV: %v", err)
+	}
 }
 
 func V1Execute(wordFilePath string, baseDir string) {
@@ -59,7 +72,7 @@ func V1Execute(wordFilePath string, baseDir string) {
 }
 
 func v2Execute(wordFilePath string, baseDir string) {
-	words, err := shared.LoadWordsFromFile(wordFilePath)
+	words, err := parallel.LoadWordsFromFile(wordFilePath)
 	if err != nil {
 		log.Fatalf("Failed to read word list: %v", err)
 	}

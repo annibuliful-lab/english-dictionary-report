@@ -22,11 +22,11 @@ def generate_realistic_word():
 
 
 # Output path for 500k words
-file_path = Path("../data/20k.txt")
+file_path = Path("../data/2m.txt")
 
 
 # chunk_size = 1_000_000
-total_words = 20_000
+total_words = 2_000_000
 
 with file_path.open("w") as f:
     words = [generate_realistic_word() for _ in range(total_words)]

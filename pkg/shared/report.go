@@ -1,6 +1,7 @@
 package shared
 
 import (
+	"encoding/csv"
 	"fmt"
 	"io/fs"
 	"log"
@@ -62,4 +63,30 @@ func ReportDirSize(dir string) int64 {
 		return nil
 	})
 	return totalSize
+}
+
+func ReportIntoCSVRow(filename string, row []string) error {
+	// Check if file exists
+	fileExists := false
+	if _, err := os.Stat(filename); err == nil {
+		fileExists = true
+	}
+
+	file, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+
+	// Write header if it's a new file
+	if !fileExists {
+		if err := writer.Write([]string{"version", "duration_ms"}); err != nil {
+			return err
+		}
+	}
+
+	return writer.Write(row)
 }
